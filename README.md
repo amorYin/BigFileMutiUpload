@@ -1,0 +1,2 @@
+# BigFileMutiUpload
+临时开发的一个安卓大文件上传plugin，希望帮助到其他人
