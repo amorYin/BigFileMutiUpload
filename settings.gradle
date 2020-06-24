@@ -1,0 +1,5 @@
+include ':uploadservice'
+include ':app:uploadlibrary'
+include ':app'
+project(':uploadservice').projectDir = new File(rootDir, 'app/uploadservice/')
+rootProject.name = "UploadDemo"
