@@ -1,8 +1,10 @@
 package com.yzplugin.perf.uploadlibrary;
 
 import android.annotation.SuppressLint;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.database.Cursor;
+import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.provider.MediaStore;
 import android.util.Log;
@@ -10,10 +12,9 @@ import android.util.Log;
 import net.gotev.uploadservice.MultipartUploadRequest;
 import net.gotev.uploadservice.UploadService;
 
-import java.io.FileNotFoundException;
+import java.io.File;
 import java.lang.ref.WeakReference;
 import java.net.MalformedURLException;
-import java.util.Date;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -30,11 +31,11 @@ public class UUPItem {
     public float mProgress = 0.0f; //计算进度
     public long mSpeed = 0;
     public String mSpeedStr;
+    public String mSizeStr;
     public UUPItemType mType;
-
-
     ////////////////////////////
     protected UUPSlicedItem mCurrentItem;
+    protected String mUploadFileName;
     protected Context mContext;
     protected MultipartUploadRequest request;
     protected UUPReceiver mReceiver;
@@ -59,47 +60,91 @@ public class UUPItem {
     }
 
     private void initSet(){
-            String[] projection = {
-                    MediaStore.Video.Media.DATA
-                    ,MediaStore.Video.Thumbnails.DATA
-                    ,MediaStore.Video.Media.DURATION
-                    ,MediaStore.Video.Media.SIZE
-                    ,MediaStore.Video.Media.DISPLAY_NAME
-                    ,MediaStore.Video.Media.MIME_TYPE };
 
-        String selection = MediaStore.Video.Media.DATA+" like ?";
-        String[] selectionArgs = {displayName()};
+        try {
+            if("file".equals(mContentUri.getScheme())){
 
-        @SuppressLint("Recycle")
-        Cursor cursor = mContext.getContentResolver().query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, selection, selectionArgs, null);
-        if(cursor != null && cursor.moveToFirst()){
-            int columnIndex = cursor.getColumnIndexOrThrow(projection[0]);
-            mFilePath = cursor.getString(columnIndex);
-            Log.d("UUPItem: ",mFilePath);
+                if(mContentUri.getPath()!=null) {
+                    File mFile = new File(mContentUri.getPath());
+                    if (mFile.exists()) {
+                        if (mType == UUPItemType.VIDEO) {
+                            MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+                            mmr.setDataSource(mContext, mContentUri);
+                            mDuration = Integer.parseInt(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
+                            mThumbnailsPath = UUPUtil.getThumbnailsPath(mContext, mFile, mmr.getFrameAtTime(0));
+                            mMimeType = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE);
+                            mmr.release();
+                        } else if (mType == UUPItemType.AUDIO) {
+                            MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+                            mmr.setDataSource(mContext, mContentUri);
+                            mDuration = Integer.parseInt(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
+                            mThumbnailsPath = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM);
+                            mMimeType = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE);
+                            mmr.release();
+                        } else {
+                            mThumbnailsPath = mFile.getAbsolutePath();
+                            mMimeType = UUPUtil.getMimeType(mFile);
+                        }
+                        mFilePath = mFile.getAbsolutePath();
+                        mDisplayName = mFile.getName();
+                        mSize = mFile.length();
+                    }
+                }
+            }else if("content".equals(mContentUri.getScheme())){
+                String[] projection = {
+                        MediaStore.MediaColumns.DATA
+                        ,MediaStore.MediaColumns.SIZE
+                        ,MediaStore.MediaColumns.DISPLAY_NAME
+                        ,MediaStore.MediaColumns.MIME_TYPE };
 
-            columnIndex = cursor.getColumnIndexOrThrow(projection[1]);
-            mThumbnailsPath = cursor.getString(columnIndex);
+                Cursor cursor = null;
+//                String selection = MediaStore.MediaColumns.DATA+" like ?";
+//                String[] selectionArgs = {displayName()};
+                ContentResolver contentResolver = mContext.getContentResolver();
 
-            columnIndex = cursor.getColumnIndexOrThrow(projection[2]);
-            mDuration = cursor.getInt(columnIndex);
+                cursor = contentResolver.query(mContentUri, projection, null, null, null);
 
-            columnIndex = cursor.getColumnIndexOrThrow(projection[3]);
-            mSize = cursor.getInt(columnIndex);
+                if(cursor != null && cursor.moveToFirst()){
+                    int columnIndex = cursor.getColumnIndexOrThrow(projection[0]);
+                    mFilePath = cursor.getString(columnIndex);
+                    Log.d("UUPItem: ",mFilePath);
 
-            columnIndex = cursor.getColumnIndexOrThrow(projection[4]);
-            mDisplayName = cursor.getString(columnIndex);
+                    columnIndex = cursor.getColumnIndexOrThrow(projection[1]);
+                    mSize = cursor.getInt(columnIndex);
 
-            columnIndex = cursor.getColumnIndexOrThrow(projection[5]);
-            mMimeType = cursor.getString(columnIndex);
+                    columnIndex = cursor.getColumnIndexOrThrow(projection[2]);
+                    mDisplayName = ""+cursor.getString(columnIndex);
+
+                    columnIndex = cursor.getColumnIndexOrThrow(projection[3]);
+                    mMimeType = cursor.getString(columnIndex);
+                }
+                if(cursor!=null)cursor.close();
+                if (mFilePath != null && mType != UUPItemType.IMAGE){
+                    File mFile = new File(mFilePath);
+                    if (mType == UUPItemType.VIDEO){
+                        MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+                        mmr.setDataSource(mContext,mContentUri);
+                        mDuration = Integer.parseInt(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
+                        mThumbnailsPath = UUPUtil.getThumbnailsPath(mContext,mFile,mmr.getFrameAtTime(0));
+                        mmr.release();
+                    }else if(mType == UUPItemType.AUDIO){
+                        MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+                        mmr.setDataSource(mContext,mContentUri);
+                        mDuration = Integer.parseInt(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
+                        mThumbnailsPath = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM);
+                        mmr.release();
+                    }
+                }
+            }else {
+                isValidate = false;
+            }
+        }catch (Exception e){
+            e.printStackTrace();
         }
-//        while (cursor!=null && cursor.moveToNext()){
-//            int columnIndex = cursor.getColumnIndexOrThrow(projection[0]);
-//            String path = cursor.getString(columnIndex);
-//            Log.d("UUPItem: ",path);
-//
-//        }
 
-        if(mFilePath == null) {isValidate = false;}
+        if(mFilePath == null || mSize < 1) {isValidate = false;}
+        mUploadFileName = UUPUtil.randomName() + mDisplayName;
+        mSizeStr = UUPUtil.calculateSize(mSize);
         Log.d("UUPItem: ","mDisplayName:"+mDisplayName+" mMimeType:"+mMimeType+" mDuration:"+mDuration+" mSize:"+mSize+" mFilePath:"+mFilePath+" mThumbnailsPath:"+mThumbnailsPath);
     }
 
@@ -135,12 +180,15 @@ public class UUPItem {
     }
 
     protected void start() {
-        isStartting = true;
-        if(!isPaused)check();
-        //check
-        if(!isValidate)return;
-        next();
-        calculateSpeed();
+        this.isStartting = true;
+        if (!this.isPaused) {
+            this.check();
+        }
+
+        if (this.isValidate) {
+            this.next();
+            this.calculateSpeed();
+        }
     }
 
     protected void next(){
@@ -162,12 +210,13 @@ public class UUPItem {
         if (mCurrentItem == null) return;
         if (request != null) request = null;
         Log.d("UUPItem", "next: "+ mCurrentItem.mChunkIndex+" "+mCurrentItem.isSuspend);
-        request = new MultipartUploadRequest(mContext,(new Date()).getTime() +"-"+ mDisplayName,mConfig.serverUri);
         try {
+            request = new MultipartUploadRequest(mContext,UUPUtil.randomName() + mDisplayName,mConfig.serverUri);
             request.addFileToUpload(mCurrentItem.mChunkFile.getAbsolutePath(), "file");
-        } catch (FileNotFoundException e) {
+        } catch (Exception e) {
             e.printStackTrace();
-            mDelegate.get().onUPError(this);
+            if(mDelegate.get() != null)
+                mDelegate.get().onUPError(this);
             return;
         }
 
@@ -232,17 +281,24 @@ public class UUPItem {
                 public void run() {
                     double tmp = (mProgress - mLastProgress) * mSize;
                     mSpeed = (long) tmp;
-                    if (mSpeed > 1024 * 1024 ){
-                        mSpeedStr = String.format("%.2fMB/s",mSpeed*1.0/1024/1024);
-                    }else if(mSpeed > 1024){
-                        mSpeedStr = String.format("%.1fKB/s",mSpeed*1.0/1024);
-                    }else {
-                        mSpeedStr = String.format("%.0fB/s",mSpeed*1.0);
-                    }
+                    mSpeedStr = UUPUtil.calculateSpeed(tmp);
                     mLastProgress = mProgress;
                     Log.d("UUPItem", "calculateSpeed: "+ mSpeedStr +" "+mSpeed +" "+tmp);
                 }
             },0,1000);
+        }
+    }
+
+    @SuppressLint("DefaultLocale")
+    private void calculateSize() {
+        if(mSize > 1024L * 1024 * 1024){
+            mSizeStr = String.format("%.2fGB",mSpeed*1.0/1024/1024/1024);
+        }else if (mSize > 1024L * 1024 ){
+            mSizeStr = String.format("%.2fMB",mSpeed*1.0/1024/1024);
+        }else if(mSize > 1024L){
+            mSizeStr = String.format("%.1fKB",mSpeed*1.0/1024);
+        }else {
+            mSizeStr = String.format("%.0fB",mSpeed*1.0);
         }
     }
 
@@ -266,4 +322,3 @@ public class UUPItem {
                 '}';
     }
 }
-

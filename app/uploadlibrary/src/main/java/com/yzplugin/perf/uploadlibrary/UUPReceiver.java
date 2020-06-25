@@ -22,8 +22,10 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
         if(!uploadId.equals(mItem.mRequestID))return;
         if (mItem.mCurrentItem == null) return;
         mItem.mCurrentItem.isSuspend = false;
+        mItem.mProgress = mItem.mPProgress - mItem.mCurrentItem.mPProgress;
         mItem.mCurrentItem = null;
         if (mItem.mSliced.remainChunk()>0){
+            Log.d("UUPItem", "retry: "+ uploadId);
             mItem.next();
             return;
         }
@@ -51,13 +53,15 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
         if (mItem.mSliced.remainChunk()>0){
             mItem.next();
         }else {
-            Log.d("UUPItem", "onFinish: "+ mItem);
             mItem.isFinish = true;
             mItem.isStartting = false;
             mItem.mProgress = 1.0f;
             mItem.mRemoteUri = getDescFileName(serverResponseBody);
             if(mItem.mDelegate.get() != null)
+                mItem.mDelegate.get().onUPProgress(mItem);
+            if(mItem.mDelegate.get() != null)
                 mItem.mDelegate.get().onUPFinish(mItem);
+            Log.d("UUPItem", "onFinish: "+ mItem);
             mItem.cancle();
         }
     }
@@ -77,7 +81,8 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
     public void onProgress(String uploadId, long uploadedBytes, long totalBytes) {
         super.onProgress(uploadId, uploadedBytes, totalBytes);
         if(!uploadId.equals(mItem.mRequestID))return;
-        mItem.mProgress = mItem.mPProgress + uploadedBytes * 1.0f/totalBytes * mItem.mCurrentItem.mProgress;
+        mItem.mCurrentItem.mPProgress = uploadedBytes * 1.0f/totalBytes * mItem.mCurrentItem.mProgress;
+        mItem.mProgress = mItem.mPProgress + mItem.mCurrentItem.mPProgress;
         Log.d("UUPItem", "onProgress: "+ mItem.mSize+"--"+uploadedBytes+"--"+mItem.mProgress+"--"+mItem.mSpeed+"--"+mItem.mSpeedStr);
         if(mItem.mDelegate.get() != null)
             mItem.mDelegate.get().onUPProgress(mItem);

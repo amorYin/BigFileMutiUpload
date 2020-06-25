@@ -1,15 +1,15 @@
 package com.yzplugin.perf.uploadlibrary;
 
 public class UUPConfig {
-    long size = 0; // 大小限制
-    int count = 0; //最多最多选择限制
-    int live = 0; //最多并行操作限制
-    int duration = 0;//文件时长限制200秒
-    int perChunks = 0;//单个分片大小
-    int retryTimes = 0;//单个分片上传失败尝试次数
-    String serverUri = null;
-    String authSign = null;
-    String card = null;
+    public long size = 0; // 大小限制
+    public int count = 0; //最多最多选择限制
+    public int live = 0; //最多并行操作限制
+    public int duration = 0;//文件时长限制200秒
+    public int perChunks = 0;//单个分片大小
+    public int retryTimes = 0;//单个分片上传失败尝试次数
+    public String serverUri = null;
+    public String authSign = null;
+    public String card = null;
 
     public UUPConfig(){
         size = 2L * 1024 * 1024 * 1024;

@@ -57,6 +57,7 @@ public class UUPManager implements UUPItf {
 
         if(mDelegate!=null)mDelegate = null;
         mDelegate = new WeakReference<>(delegate);
+        mConfig = delegate.onConfigure();
     }
 
     public UUPConfig getConfig() {

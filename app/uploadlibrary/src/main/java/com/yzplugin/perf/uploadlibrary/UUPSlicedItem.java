@@ -7,6 +7,7 @@ class UUPSlicedItem {
     protected File mChunkFile;
     protected long mChunkSize;
     protected float mProgress;
+    protected float mPProgress;
     protected boolean isFinish;
     protected boolean isSuspend;
 }

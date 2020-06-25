@@ -25,9 +25,9 @@ class UUPSliced {
         mItem = item.get();
         if(mItem != null){
             mPath = mItem.mFilePath;
-            String path = mItem.mDisplayName.replace(".","~");
-            mTempRoot = mItem.mContext.getExternalFilesDir(path);
-            isFilesExist(mTempRoot);
+            String path = mItem.mUploadFileName.replace(".","~");
+            mTempRoot = mItem.mContext.getExternalFilesDir("Sliced/"+path);
+            UUPUtil.isFilesExist(mTempRoot);
             if(mItem.mConfig != null){
                 mConfig = mItem.mConfig;
             }else {
@@ -109,13 +109,6 @@ class UUPSliced {
     protected int remainChunk(){
         if(mChunkList == null)return 0;
         return mChunkList.size();
-    }
-
-    void isFilesExist (File file){
-        if (file != null && !file.exists()){
-            //noinspection ResultOfMethodCallIgnored
-            file.mkdir();
-        }
     }
 
     void clean(UUPSlicedItem item){
