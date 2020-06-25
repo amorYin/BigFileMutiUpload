@@ -4,14 +4,14 @@ import android.annotation.SuppressLint;
 import android.util.Log;
 
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Vector;
 
 public class UUPManager implements UUPItf {
     private WeakReference<UUPItf> mDelegate;
     private UUPConfig mConfig;
-    private List<UUPItem> mUploading;
+    private Vector<UUPItem> mUploading;
     private HashMap<UUPItem,WeakReference<UUPItf>> mRecords;
     private boolean isPause;
 
@@ -39,7 +39,7 @@ public class UUPManager implements UUPItf {
 
     private void initSet(){
         mConfig = new UUPConfig();
-        mUploading = new ArrayList<>();
+        mUploading = new Vector<>();
         mRecords = new HashMap<>();
     }
 
@@ -138,6 +138,8 @@ public class UUPManager implements UUPItf {
                             mRecords.remove(item);
                         }
                     }
+                }else if(item.isFinish){
+                    item.cancle();
                 }else {
                     item.pause();
                 }

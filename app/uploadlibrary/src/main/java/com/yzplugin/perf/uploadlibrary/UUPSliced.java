@@ -12,9 +12,10 @@ import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Vector;
 
 class UUPSliced {
-    private List<UUPSlicedItem> mChunkList;
+    private Vector<UUPSlicedItem> mChunkList;
     private UUPConfig mConfig;
     private String mPath;
     private File mTempRoot;
@@ -33,7 +34,7 @@ class UUPSliced {
             }else {
                 mConfig = new UUPConfig();
             }
-            mChunkList = new ArrayList<>();
+            mChunkList = new Vector<>();
         }
     }
 

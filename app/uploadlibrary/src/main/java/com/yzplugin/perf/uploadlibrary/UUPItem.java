@@ -41,6 +41,7 @@ public class UUPItem {
     protected UUPReceiver mReceiver;
     protected boolean isStartting;
     protected boolean isPaused;
+    protected boolean isCancel;
     protected boolean isFinish;
     protected boolean isValidate = true;
     protected float mPProgress = 0.0f; //分片上传真实进度
@@ -208,7 +209,11 @@ public class UUPItem {
         if(mCurrentItem!=null && !mCurrentItem.isFinish) return;
         mCurrentItem = mSliced.nextSliced();
         if (mCurrentItem == null) return;
-        if (request != null) request = null;
+        if (request != null) {
+            if(mRequestID != null)
+                UploadService.stopUpload(mRequestID);
+            request = null;
+        }
         Log.d("UUPItem", "next: "+ mCurrentItem.mChunkIndex+" "+mCurrentItem.isSuspend);
         try {
             request = new MultipartUploadRequest(mContext,UUPUtil.randomName() + mDisplayName,mConfig.serverUri);
@@ -247,11 +252,13 @@ public class UUPItem {
             UploadService.stopUpload(mRequestID);
             isPaused = true;
             isStartting = false;
+            mRequestID = null;
         }
     }
 
     protected void cancle(){
         Log.d("UUPItem", "cancle-cancle: "+ this);
+        isCancel = true;
         if( mRequestID != null){
             UploadService.stopUpload(mRequestID);
         }
@@ -267,7 +274,6 @@ public class UUPItem {
         mReceiver = null;
         if(mSpeedTimer!=null){
             mSpeedTimer.cancel();
-            mSpeedTimer.purge();
         }
         mSpeedTimer = null;
     }
@@ -288,6 +294,11 @@ public class UUPItem {
                     Log.d("UUPItem", "calculateSpeed: "+ mSpeedStr +" "+mSpeed +" "+tmp);
                     if(mDelegate.get() != null)
                         mDelegate.get().onUPProgress(weakSelf);
+                    if(!UUPUtil.isNetworkConnected(mContext)){
+                        pause();
+                    }else {
+                        start();
+                    }
                 }
             },0,1000);
         }

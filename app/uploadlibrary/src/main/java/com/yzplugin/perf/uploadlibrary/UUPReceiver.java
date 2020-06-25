@@ -1,6 +1,5 @@
 package com.yzplugin.perf.uploadlibrary;
 
-import android.net.Uri;
 import android.util.Log;
 
 import net.gotev.uploadservice.UploadServiceBroadcastReceiver;
@@ -19,19 +18,17 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
     @Override
     public void onCancelled(String uploadId) {
         super.onCancelled(uploadId);
+        Log.d("UUPItem", "onCancelled: "+ uploadId);
         if(!uploadId.equals(mItem.mRequestID))return;
         if (mItem.mCurrentItem == null) return;
         mItem.mCurrentItem.isSuspend = false;
         mItem.mProgress = mItem.mPProgress - mItem.mCurrentItem.mPProgress;
         mItem.mCurrentItem = null;
-        if (mItem.mSliced.remainChunk()>0){
+        if (mItem.mSliced.remainChunk()>0 && !mItem.isCancel){
             Log.d("UUPItem", "Faild Retry: "+ uploadId);
-            if(mItem.mDelegate.get() != null)
-                mItem.mDelegate.get().onUPFaild(mItem);
             mItem.next();
             return;
         }
-        Log.d("UUPItem", "onCancelled: "+ uploadId);
         if(mItem.mDelegate.get() != null)
             mItem.mDelegate.get().onUPFaild(mItem);
     }
@@ -48,18 +45,19 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
                 mItem.mDelegate.get().onUPFaild(mItem);
             return;
         }
+
         mItem.mPProgress += mItem.mCurrentItem.mProgress;
         mItem.mCurrentItem.isSuspend = false;
         mItem.mSliced.clean(mItem.mCurrentItem);
         mItem.mCurrentItem = null;
 
-        if (mItem.mSliced.remainChunk()>0){
-            mItem.next();
-        }else {
+        String reomoteUri = getDescFileName(serverResponseBody);
+        if(reomoteUri!=null)mItem.mRemoteUri =reomoteUri;
+
+        if (mItem.mSliced.remainChunk()<1){
             mItem.isFinish = true;
             mItem.isStartting = false;
             mItem.mProgress = 1.0f;
-            mItem.mRemoteUri = getDescFileName(serverResponseBody);
             if(mItem.mDelegate.get() != null)
                 mItem.mDelegate.get().onUPProgress(mItem);
             if(mItem.mDelegate.get() != null)
@@ -73,9 +71,11 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
     public void onError(String uploadId, Exception exception) {
         super.onError(uploadId, exception);
         if(!uploadId.equals(mItem.mRequestID))return;
-        if(mItem.mDelegate.get() != null && !mItem.isFinish) {
-            Log.d("UUPItem", "onError: "+ mItem);
+        Log.d("UUPItem", "onError: "+ mItem);
+        if(mItem.mDelegate.get() != null) {
             mItem.mDelegate.get().onUPError(mItem);
+        }
+        if(!mItem.isFinish){
             mItem.pause();
         }
     }
