@@ -275,6 +275,8 @@ public class UUPItem {
     private void calculateSpeed(){
         if (mSpeedTimer == null){
             mSpeedTimer = new Timer();
+            WeakReference<UUPItem> weakReference = new WeakReference<>(this);
+            final UUPItem weakSelf = weakReference.get();
             mSpeedTimer.schedule(new TimerTask() {
                 @SuppressLint("DefaultLocale")
                 @Override
@@ -284,6 +286,8 @@ public class UUPItem {
                     mSpeedStr = UUPUtil.calculateSpeed(tmp);
                     mLastProgress = mProgress;
                     Log.d("UUPItem", "calculateSpeed: "+ mSpeedStr +" "+mSpeed +" "+tmp);
+                    if(mDelegate.get() != null)
+                        mDelegate.get().onUPProgress(weakSelf);
                 }
             },0,1000);
         }

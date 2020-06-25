@@ -25,7 +25,9 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
         mItem.mProgress = mItem.mPProgress - mItem.mCurrentItem.mPProgress;
         mItem.mCurrentItem = null;
         if (mItem.mSliced.remainChunk()>0){
-            Log.d("UUPItem", "retry: "+ uploadId);
+            Log.d("UUPItem", "Faild Retry: "+ uploadId);
+            if(mItem.mDelegate.get() != null)
+                mItem.mDelegate.get().onUPFaild(mItem);
             mItem.next();
             return;
         }
@@ -40,9 +42,10 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
         if(!uploadId.equals(mItem.mRequestID))return;
         Log.d("UUPItem", "onCompleted: "+ mItem.mSliced.mTotalChunks + "--"+mItem.mSliced.remainChunk()+"   "+new String(serverResponseBody));
         if(!checkIsSessionValid(serverResponseBody)){
+            Log.d("UUPItem", "onCancelled: "+ uploadId);
             mItem.cancle();
             if(mItem.mDelegate.get() != null)
-                mItem.mDelegate.get().onUPError(mItem);
+                mItem.mDelegate.get().onUPFaild(mItem);
             return;
         }
         mItem.mPProgress += mItem.mCurrentItem.mProgress;
