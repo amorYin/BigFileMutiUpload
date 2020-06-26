@@ -69,7 +69,8 @@ public class UUPManager implements UUPItf {
         Log.d("UUPItem", "destory!-cancle-cancle: "+ this);
         if (mRecords == null) return;
         for (UUPItem item: mRecords.keySet()) {
-            if(mRecords.get(item) == null || mRecords.get(item).get() == delegate){
+            WeakReference<UUPItf> _mDelegate = mRecords.get(item);
+            if(_mDelegate == null || _mDelegate.get() == delegate){
                 item.cancle();
                 mRecords.remove(item);
             }
@@ -78,7 +79,7 @@ public class UUPManager implements UUPItf {
 
     //销毁UUPManager
     public void destory(){
-        Log.d("UUPItem", "destory-cancle-cancle: "+ this);
+        Log.d("UUPItem", "destory!!!-cancle-cancle: "+ this);
         if (mRecords != null){
             for (UUPItem item: mRecords.keySet()) {
                 item.cancle();

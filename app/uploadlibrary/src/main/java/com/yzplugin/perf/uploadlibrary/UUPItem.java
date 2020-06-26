@@ -270,6 +270,7 @@ public class UUPItem {
         mCurrentItem = null;
         if(mSliced!=null)mSliced.destroy();
         mSliced = null;
+        UUPUtil.deleteThumbnail(mThumbnailsPath);
         if(mReceiver!=null)mReceiver.unregister(mContext);
         mReceiver = null;
         if(mSpeedTimer!=null){
@@ -304,19 +305,16 @@ public class UUPItem {
         }
     }
 
-    @SuppressLint("DefaultLocale")
-    private void calculateSize() {
-        if(mSize > 1024L * 1024 * 1024){
-            mSizeStr = String.format("%.2fGB",mSpeed*1.0/1024/1024/1024);
-        }else if (mSize > 1024L * 1024 ){
-            mSizeStr = String.format("%.2fMB",mSpeed*1.0/1024/1024);
-        }else if(mSize > 1024L){
-            mSizeStr = String.format("%.1fKB",mSpeed*1.0/1024);
-        }else {
-            mSizeStr = String.format("%.0fB",mSpeed*1.0);
-        }
+    //仅供recevier使用
+    protected void pCalculateSpeed(){
+        double tmp = (mProgress - mLastProgress) * mSize;
+        mSpeed = (long) tmp;
+        mSpeedStr = UUPUtil.calculateSpeed(tmp);
+        mLastProgress = mProgress;
+        Log.d("UUPItem", "calculateSpeed: "+ mSpeedStr +" "+mSpeed +" "+tmp);
+        if(mDelegate.get() != null)
+            mDelegate.get().onUPProgress(this);
     }
-
 
     @Override
     public String toString() {

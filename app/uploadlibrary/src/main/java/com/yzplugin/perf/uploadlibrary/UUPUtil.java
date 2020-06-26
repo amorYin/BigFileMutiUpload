@@ -61,6 +61,8 @@ class UUPUtil {
             if(thumbnails != null){
                 String filePath = thumbnails.getAbsolutePath()+"/"+path+".jpg";
                 File chunkFile = new File(filePath);
+                //noinspection ResultOfMethodCallIgnored
+                chunkFile.createNewFile();
                 BufferedOutputStream bos = null;
                 bos = new BufferedOutputStream(new FileOutputStream(chunkFile));
                 bm.compress(Bitmap.CompressFormat.JPEG, 80, bos);
@@ -72,6 +74,16 @@ class UUPUtil {
             e.printStackTrace();
         }
         return null;
+    }
+
+    protected static boolean deleteThumbnail(String filePath){
+        if (filePath != null){
+            File chunkFile = new File(filePath);
+            if ("Thumbnails".equals(chunkFile.getParent())){
+                return chunkFile.delete();
+            }
+        }
+        return false;
     }
 
     @SuppressLint("DefaultLocale")

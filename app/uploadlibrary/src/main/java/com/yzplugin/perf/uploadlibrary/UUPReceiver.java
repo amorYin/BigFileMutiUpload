@@ -29,6 +29,7 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
             mItem.next();
             return;
         }
+        mItem.pause();
         if(mItem.mDelegate.get() != null)
             mItem.mDelegate.get().onUPFaild(mItem);
     }
@@ -38,22 +39,29 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
         super.onCompleted(uploadId, serverResponseCode, serverResponseBody);
         if(!uploadId.equals(mItem.mRequestID))return;
         Log.d("UUPItem", "onCompleted: "+ mItem.mSliced.mTotalChunks + "--"+mItem.mSliced.remainChunk()+"   "+new String(serverResponseBody));
-        if(!checkIsSessionValid(serverResponseBody)){
-            Log.d("UUPItem", "onCancelled: "+ uploadId);
-            mItem.cancle();
-            if(mItem.mDelegate.get() != null)
-                mItem.mDelegate.get().onUPFaild(mItem);
+        //失败的话
+        if (mItem.mCurrentItem == null) return;
+        mItem.mCurrentItem.isSuspend = false;
+        mItem.mCurrentItem = null;
+        String result = checkIsSessionValid(serverResponseBody);
+        if(result!=null){
+            mItem.pause();
+            if ("-1001".equals(result)){
+                Log.d("UUPItem", "onError: "+ uploadId);
+                if(mItem.mDelegate.get() != null)
+                    mItem.mDelegate.get().onUPError(mItem);
+            }else {
+                Log.d("UUPItem", "Faild Retry: "+ uploadId);
+                mItem.next();
+            }
             return;
         }
 
         mItem.mPProgress += mItem.mCurrentItem.mProgress;
-        mItem.mCurrentItem.isSuspend = false;
         mItem.mSliced.clean(mItem.mCurrentItem);
-        mItem.mCurrentItem = null;
 
         String reomoteUri = getDescFileName(serverResponseBody);
         if(reomoteUri!=null)mItem.mRemoteUri =reomoteUri;
-
         if (mItem.mSliced.remainChunk()<1){
             mItem.isFinish = true;
             mItem.isStartting = false;
@@ -86,29 +94,34 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
         if(!uploadId.equals(mItem.mRequestID))return;
         mItem.mCurrentItem.mPProgress = uploadedBytes * 1.0f/totalBytes * mItem.mCurrentItem.mProgress;
         mItem.mProgress = mItem.mPProgress + mItem.mCurrentItem.mPProgress;
+        mItem.pCalculateSpeed();
         Log.d("UUPItem", "onProgress: "+ mItem.mSize+"--"+uploadedBytes+"--"+mItem.mProgress+"--"+mItem.mSpeed+"--"+mItem.mSpeedStr);
         if(mItem.mDelegate.get() != null)
             mItem.mDelegate.get().onUPProgress(mItem);
     }
 
-    private boolean checkIsSessionValid(byte[] body) {
+    private String checkIsSessionValid(byte[] body) {
         try {
+            if(body.length <1)return "103";
             String jsonString = new String(body);
             JSONObject jobj = new JSONObject(jsonString);
             String ret = jobj.optString("result");
-            if (ret.equals("-1001"))
-                return false;
+            if (ret.isEmpty() || "null".equals(ret)) return "103";
+            return ret;
         } catch (JSONException e) {
             e.printStackTrace();
         }
-        return true;
+        return null;
     }
 
     private String getDescFileName(byte[] body) {
         try {
+            if(body.length <1)return null;
             String jsonString = new String(body);
             JSONObject jobj = new JSONObject(jsonString);
-            return jobj.optString("descfilename");
+            String filename = jobj.optString("descfilename");
+            if (filename.length() > 3) return filename;
+            return null;
         } catch (JSONException e) {
             e.printStackTrace();
         }
