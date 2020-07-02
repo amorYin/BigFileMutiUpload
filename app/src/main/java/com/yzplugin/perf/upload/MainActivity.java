@@ -1,14 +1,10 @@
 package com.yzplugin.perf.upload;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.FileProvider;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
-import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -126,7 +122,12 @@ public class MainActivity extends AppCompatActivity implements UUPItf {
 
     @Override
     public UUPConfig onConfigure(){
-        return new UUPConfig();
+        UUPConfig config = new UUPConfig();
+        config.authSign = "";
+        config.card = "";
+        config.serverUri = "";
+        config.fuidURi = "";
+        return config;
     }
 
     @Override
@@ -147,11 +148,6 @@ public class MainActivity extends AppCompatActivity implements UUPItf {
     @Override
     public void onUPFinish(UUPItem item) {
 //        Log.d("UUPItem", "onUPFinish: "+ item);
-    }
-
-    @Override
-    public void onUPFaild(UUPItem item) {
-
     }
 
     @Override

@@ -67,12 +67,15 @@ public class UUPManager implements UUPItf {
     //销毁单个Activity
     public void destory(UUPItf delegate){
         Log.d("UUPItem", "destory!-cancle-cancle: "+ this);
-        if (mRecords == null) return;
-        for (UUPItem item: mRecords.keySet()) {
-            WeakReference<UUPItf> _mDelegate = mRecords.get(item);
-            if(_mDelegate == null || _mDelegate.get() == delegate){
-                item.cancle();
-                mRecords.remove(item);
+        if (mRecords != null) {
+            synchronized (this) {
+                for (UUPItem item: mRecords.keySet()) {
+                    WeakReference<UUPItf> _mDelegate = mRecords.get(item);
+                    if(_mDelegate == null || _mDelegate.get() == delegate){
+                        if(!item.isCancel)item.cancle();
+                        mRecords.remove(item);
+                    }
+                }
             }
         }
     }
@@ -80,42 +83,45 @@ public class UUPManager implements UUPItf {
     //销毁UUPManager
     public void destory(){
         Log.d("UUPItem", "destory!!!-cancle-cancle: "+ this);
-        if (mRecords != null){
-            for (UUPItem item: mRecords.keySet()) {
-                item.cancle();
+        synchronized (this) {
+            if (mRecords != null) {
+                for (UUPItem item : mRecords.keySet()) {
+                    if (!item.isCancel) item.cancle();
+                }
+                mRecords.clear();
+                mRecords = null;
             }
-            mRecords.clear();
-            mRecords = null;
-        }
 
-        if(mUploading != null){
-            for (UUPItem item: mUploading) {
-                item.cancle();
+            if (mUploading != null) {
+                for (UUPItem item : mUploading) {
+                    if (!item.isCancel) item.cancle();
+                }
+                mUploading.clear();
+                mUploading = null;
             }
-            mUploading.clear();
-            mUploading = null;
-        }
 
-        mConfig = null;
-        mDelegate = null;
+            mConfig = null;
+            mDelegate = null;
+        }
     }
 
     ///
     public void strat(UUPItem item,boolean immediately){
-
-        if(immediately){
-            if(!mUploading.contains(item)) {
-                mUploading.remove(item);
-                item.isStartting = false;
+        synchronized (this) {
+            if(immediately){
+                if(!mUploading.contains(item)) {
+                    mUploading.remove(item);
+                    item.isStartting = false;
+                }
+                mUploading.add(0,item);
+            }else{
+                if(!mUploading.contains(item))
+                    mUploading.add(item);
             }
-            mUploading.add(0,item);
-        }else{
-            if(!mUploading.contains(item))
-                mUploading.add(item);
+            mRecords.put(item,mDelegate);
+            isPause = false;
+            action();
         }
-        mRecords.put(item,mDelegate);
-        isPause = false;
-        action();
     }
 
     private void action(){
@@ -130,39 +136,43 @@ public class UUPManager implements UUPItf {
                     }else {
                         item.setDelegate(this);
                         if (item.isValidate){
-                            item.start();
+                            if(!item.isStartting)item.start();
                         }else {
                             Log.d("UUPItem", "isValidate-cancle-cancle: "+ this);
                             //文件不存在
-                            item.cancle();
-                            mUploading.remove(item);
-                            mRecords.remove(item);
+                            if(!item.isCancel)item.cancle();
+                            synchronized (this) {
+                                mUploading.remove(item);
+                                mRecords.remove(item);
+                            }
                         }
                     }
                 }else if(item.isFinish){
-                    item.cancle();
+                    synchronized (this) {
+                        mUploading.remove(item);
+                        mRecords.remove(item);
+                    }
                 }else {
-                    item.pause();
+                    if(!item.isPaused)item.pause();
                 }
             }
         }
     }
 
     public void pause(UUPItem item){
-        if(item == null){
-            isPause = true;
-        }else {
-            item.pause();
+        if(item != null){
+            if(!item.isPaused)item.pause();
             action();
         }
     }
 
     public void cancle(UUPItem item){
-        if (item == null){
-            isPause = false;
-            destory(mDelegate.get());
-        }else {
-            item.cancle();
+        if(item !=null){
+            synchronized (this){
+                mRecords.remove(item);
+                mUploading.remove(item);
+            }
+            if(!item.isCancel)item.cancle();
             action();
         }
     }
@@ -176,21 +186,21 @@ public class UUPManager implements UUPItf {
 
     @Override
     public void onUPStart(UUPItem item) {
-        if (mDelegate.get() != null ){
+        if (mDelegate != null && mDelegate.get() != null ){
             mDelegate.get().onUPStart(item);
         }
     }
 
     @Override
     public void onUPProgress(UUPItem item) {
-        if (mDelegate.get() != null ){
+        if (mDelegate != null && mDelegate.get() != null ){
             mDelegate.get().onUPProgress(item);
         }
     }
 
     @Override
     public void onUPPause(UUPItem item) {
-        if (mDelegate.get() != null ){
+        if (mDelegate != null && mDelegate.get() != null ){
             mDelegate.get().onUPPause(item);
         }
         action();
@@ -198,39 +208,20 @@ public class UUPManager implements UUPItf {
 
     @Override
     public void onUPFinish(UUPItem item) {
-        HashMap<UUPItem,WeakReference<UUPItf>> _mRecords = mRecords;
-        if (_mRecords != null){
-            for (UUPItem it: _mRecords.keySet()) {
-                if (it.equals(item)){
-                    mRecords.remove(it);
-                }
-            }
+        synchronized (this){
+            mRecords.remove(item);
+            mUploading.remove(item);
         }
-        List<UUPItem> _mUploading = mUploading;
-        if(_mUploading != null){
-            for (UUPItem it: _mUploading) {
-                if (it.equals(item)){
-                    mUploading.remove(it);
-                }
-            }
-        }
-        if (mDelegate.get() != null ){
+
+        if (mDelegate != null && mDelegate.get() != null ){
             mDelegate.get().onUPFinish(item);
         }
         action();
     }
 
     @Override
-    public void onUPFaild(UUPItem item) {
-        if (mDelegate.get() != null ){
-            mDelegate.get().onUPFaild(item);
-        }
-        action();
-    }
-
-    @Override
     public void onUPError(UUPItem item) {
-        if (mDelegate.get() != null ){
+        if (mDelegate != null && mDelegate.get() != null ){
             mDelegate.get().onUPError(item);
         }
         action();

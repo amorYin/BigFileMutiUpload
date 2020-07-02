@@ -63,8 +63,7 @@ class UUPUtil {
                 File chunkFile = new File(filePath);
                 //noinspection ResultOfMethodCallIgnored
                 chunkFile.createNewFile();
-                BufferedOutputStream bos = null;
-                bos = new BufferedOutputStream(new FileOutputStream(chunkFile));
+                BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(chunkFile));
                 bm.compress(Bitmap.CompressFormat.JPEG, 80, bos);
                 bos.flush();
                 bos.close();
@@ -88,7 +87,7 @@ class UUPUtil {
 
     @SuppressLint("DefaultLocale")
     protected static String calculateSpeed(double mSpeed) {
-        String mSpeedStr = "0B/s";
+        String mSpeedStr;
         if (mSpeed > 1024 * 1024 ){
             mSpeedStr = String.format("%.2fMB/s",mSpeed*1.0/1024/1024);
         }else if(mSpeed > 1024){
@@ -101,7 +100,7 @@ class UUPUtil {
 
     @SuppressLint("DefaultLocale")
     protected static String calculateSize(long mSize) {
-        String mSizeStr = "0B";
+        String mSizeStr;
         if(mSize > 1024L * 1024 * 1024){
             mSizeStr = String.format("%.2fGB",mSize*1.0/1024/1024/1024);
         }else if (mSize > 1024L * 1024 ){

@@ -5,7 +5,6 @@ public interface UUPItf {
     void onUPProgress(UUPItem item);
     void onUPPause(UUPItem item);
     void onUPFinish(UUPItem item);
-    void onUPFaild(UUPItem item);
     void onUPError(UUPItem item);
     UUPConfig onConfigure();
 }
