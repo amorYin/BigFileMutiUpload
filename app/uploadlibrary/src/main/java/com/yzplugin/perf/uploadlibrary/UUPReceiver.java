@@ -21,18 +21,22 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
     @Override
     public void onCancelled(String uploadId) {
         super.onCancelled(uploadId);
-        Log.d("UUPItem", "onCancelled: "+ uploadId);
-        if(!uploadId.equals(mItem.mRequestID))return;
+        if(mItem == null || !uploadId.equals(mItem.mRequestID))return;
+        Log.d("UUPItem", "onCancelled: "+ uploadId+"|"+mItem.mError);
         if (mItem.mCurrentItem != null) {
             mItem.mCurrentItem.isSuspend = false;
             mItem.mCurrentItem = null;
             if(!mItem.isCancel && !mItem.isIgnoreCancel){
                 if (UUPUtil.isNetworkConnected(mItem.mContext)){
-                    mItem.mError = UUPErrorType.OVER_RETRY;
+                    mItem.preStart();
                 }else {
                     mItem.mError = UUPErrorType.BAD_NET;
+                    if(UUPUtil.isNetworkConnected(mItem.mContext)){
+                        mItem.preStart();
+                    }else {
+                        mItem.pause();
+                    }
                 }
-                mItem.cancle();
             }
         }
         mItem.mHander.sendEmptyMessage(0);
@@ -41,20 +45,8 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
     @Override
     public void onCompleted(String uploadId, int serverResponseCode, byte[] serverResponseBody) {
         super.onCompleted(uploadId, serverResponseCode, serverResponseBody);
-        if(!uploadId.equals(mItem.mRequestID))return;
+        if(mItem == null || !uploadId.equals(mItem.mRequestID))return;
         Log.d("UUPItem", "onCompleted: "+ mItem.mSliced.mTotalChunks + "--"+mItem.mSliced.remainChunk()+"   "+new String(serverResponseBody));
-
-        if (serverResponseCode / 200 != 1 ){
-            mItem.mError = UUPErrorType.BAD_OTHER;
-            mItem.mHander.sendEmptyMessage(0);
-            if(!mItem.isCancel){
-                mItem.isIgnoreCancel = true;
-                mItem.cancle();
-            }
-            Log.d("UUPItem", "onCompleted: serverResponseCode"+ serverResponseCode);
-            return;
-        }
-
 
         Map<String,String> result = checkIsSessionValid(serverResponseBody);
         if(result != null){
@@ -65,17 +57,16 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
                 Log.d("UUPItem", "onError: "+ uploadId);
                 switch (code) {
                     case "-1":
-                        mItem.mError = UUPErrorType.BAD_MIMETYPE;
+                    case "1002":
+                        mItem.mError = UUPErrorType.BAD_FUID;
                         break;
                     case "-1001":
                     case "1000":
                         mItem.mError = UUPErrorType.BAD_ACCESS;
                         break;
+                    case "-2":
                     case "1001":
                         mItem.mError = UUPErrorType.BAD_PARAMS;
-                        break;
-                    case "1002":
-                        mItem.mError = UUPErrorType.BAD_FUID;
                         break;
                     case "1003":
                         mItem.mError = UUPErrorType.BAD_SLICED;
@@ -84,10 +75,16 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
                         mItem.mError = UUPErrorType.BAD_OTHER;
                         break;
                 }
-                mItem.mHander.sendEmptyMessage(0);
                 if(!mItem.isCancel){
-                    mItem.isIgnoreCancel = true;
-                    mItem.cancle();
+                    mItem.mCurrentItem.isSuspend = false;
+                    mItem.mCurrentItem.isFinish = false;
+                    mItem.mCurrentItem.mPProgress = 0.0f;
+                    mItem.mCurrentItem = null;
+                    if(mItem.mError == UUPErrorType.BAD_FUID){
+                        mItem.getFUID();
+                    }else {
+                        mItem.preStart();
+                    }
                 }
             }else {
                 String current_index = result.get("current_index");
@@ -107,6 +104,7 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
                     mItem.mCurrentItem.mPProgress = 0.0f;
                     mItem.mCurrentItem = null;
                 }
+                mItem.mError = UUPErrorType.NONE;
                 mItem.preStart();
             }
         }else {
@@ -114,13 +112,15 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
             mItem.mCurrentItem.isFinish = false;
             mItem.mCurrentItem.mPProgress = 0.0f;
             mItem.mCurrentItem = null;
+            mItem.preStart();
         }
+        mItem.mHander.sendEmptyMessage(0);
     }
 
     @Override
     public void onError(String uploadId, Exception exception) {
         super.onError(uploadId, exception);
-        if(!uploadId.equals(mItem.mRequestID))return;
+        if(mItem == null || !uploadId.equals(mItem.mRequestID))return;
         Log.d("UUPItem", "onError: "+ mItem);
         if (mItem.mCurrentItem != null) {
             mItem.mCurrentItem.isSuspend = false;
@@ -129,8 +129,8 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
             mItem.mCurrentItem = null;
         }
         if(!mItem.isCancel){
-            mItem.isIgnoreCancel = true;
-            mItem.cancle();
+            mItem.isIgnoreCancel = false;
+            mItem.preStart();
         }
         mItem.mHander.sendEmptyMessage(0);
     }
@@ -141,7 +141,6 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
         if(!uploadId.equals(mItem.mRequestID))return;
         mItem.mCurrentItem.mPProgress = uploadedBytes * 1.0f/totalBytes * mItem.mCurrentItem.mProgress;
         mItem.mProgress = mItem.mPProgress + mItem.mCurrentItem.mPProgress;
-        mItem.pCalculateSpeed();
         Log.d("UUPItem", "onProgress: "+ mItem.mSize+"--"+uploadedBytes+"--"+mItem.mProgress+"--"+mItem.mSpeed+"--"+mItem.mSpeedStr);
         mItem.mHander.sendEmptyMessage(1);
     }
@@ -155,10 +154,12 @@ class UUPReceiver extends UploadServiceBroadcastReceiver {
             result.put("status",jobj.optString("status"));
             result.put("msg",jobj.optString("msg"));
             result.put("errorCode",jobj.optString("errorCode"));
-            JSONObject data = jobj.getJSONObject("data");
-            result.put("file_path",data.optString("file_path"));
-            result.put("current_index",data.optString("current_index"));
-            result.put("save_index",data.optString("save_index"));
+            JSONObject data = jobj.optJSONObject("data");
+            if(data != null){
+                result.put("file_path",data.optString("file_path"));
+                result.put("current_index",data.optString("current_index"));
+                result.put("save_index",data.optString("save_index"));
+            }
             return result;
         } catch (JSONException e) {
             e.printStackTrace();

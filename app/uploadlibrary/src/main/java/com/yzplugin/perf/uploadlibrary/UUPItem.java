@@ -58,6 +58,8 @@ public class UUPItem {
     private float mLastProgress = 0.0f;
     private Timer mSpeedTimer;
     private int lowTimes = 0;
+    protected boolean isGetingFuid;
+    protected boolean isAppPause;
 
     WeakReference<UUPItem> weakReference = new WeakReference<>(this);
     final UUPItem weakSelf = weakReference.get();
@@ -66,17 +68,20 @@ public class UUPItem {
         @Override
         public void handleMessage(Message msg) {
             if (msg.what == 0){
-                if(mError != UUPErrorType.NONE && mDelegate != null && mDelegate.get() != null)
+                if(!isFinish && mError != UUPErrorType.NONE && mDelegate != null && mDelegate.get() != null){
                     mDelegate.get().onUPError(weakSelf);
+                    Log.d("UUPItem_message", "onUPError: "+weakSelf);
+                }
             }else if(msg.what == 1){
                 if(mDelegate != null && mDelegate.get() != null)
                     mDelegate.get().onUPProgress(weakSelf);
             }else if(msg.what == 2){
-                if(mDelegate != null && mDelegate.get() != null)
+                if(mDelegate != null && mDelegate.get() != null){
+                    Log.d("UUPItem_message", "onUPFinish: "+weakSelf);
                     mDelegate.get().onUPFinish(weakSelf);
-                Log.d("UUPItem", "onUPFinish: "+weakSelf);
+                }
             }else {
-                if(mDelegate != null && mDelegate.get() != null)
+                if(!isFinish && mDelegate != null && mDelegate.get() != null)
                     mDelegate.get().onUPStart(weakSelf);
             }
 
@@ -88,6 +93,7 @@ public class UUPItem {
         mContentUri = path;
         mType = type;
         mSpeed = 0L;
+        mSpeedStr = "初始化中请稍等...";
         mProgress = 0.0f;
         mPProgress = 0.0f;
         mLastProgress = 0.0f;
@@ -108,62 +114,91 @@ public class UUPItem {
             this.check();
         }
 
-        if (this.isValidate) {
+        if (this.isValidate && !this.isFinish) {
             isPaused = false;
 
-            if (request != null){
-                isIgnoreCancel = true;
-                UploadService.stopUpload(mRequestID);
-                mRequestID = null;
-                request = null;
-            }
+//            if (request != null){
+//                isIgnoreCancel = true;
+//                UploadService.stopUpload(mRequestID);
+//                mRequestID = null;
+//                request = null;
+//            }
             if (mFUID == null){
                 getFUID();
             }else {
-                this.next();
-                this.calculateSpeed();
+                if(mSliced == null)return;
+                if (mSliced.mMakeChunking){
+                    //holder;
+                    Log.d("UUPItem-start","请等待。。文件分片中");
+                }else{
+                    next();
+                    this.calculateSpeed();
+                    isIgnoreCancel = false;
+                }
             }
             this.isStartting = true;
+            mHander.sendEmptyMessage(1);
             mHander.sendEmptyMessage(4);
+        }else{
+            cancle();
         }
     }
 
     public void pause(){
         Log.d("UUPItem", "pause-cancle: "+ this);
-        if (isPaused)return;
-        isPaused = true;
-        if (request != null){
+        if(!isAppPause){
+            isPaused = true;
+        }
+        isAppPause = false;
+        if (mCurrentItem != null) {
+            mCurrentItem.isSuspend = false;
+            mCurrentItem.isFinish = false;
+            mCurrentItem.mPProgress = 0.0f;
+            mCurrentItem = null;
+        }
+        if (request != null && mRequestID!=null){
             isIgnoreCancel = true;
             UploadService.stopUpload(mRequestID);
             mRequestID = null;
             request = null;
         }
-        destory();
     }
 
     public void cancle(){
         if (isCancel)return;
         Log.d("UUPItem", "cancle-cancle: "+ this);
+        isIgnoreCancel = true;
         isCancel = true;
         destory();
     }
 
     protected void preStart(){
-        if (isValidate){
-            if(!isPaused){
-                if(mSliced.remainChunk() < 1){
-                    preFinish();
-                }else {
-                    if(request != null){
-                        isIgnoreCancel = true;
-                        UploadService.stopUpload(mRequestID);
-                        request = null;
-                    }
-                    if(mFUID == null){
-                        getFUID();
+        synchronized (this){
+            if (isValidate){
+                if(!isPaused && !isCancel && !isFinish){
+                    if(mSliced !=null && mSliced.remainChunk() < 1 && !mSliced.mMakeChunking){
+                        preFinish();
                     }else {
-                        next();
-                        isIgnoreCancel = false;
+//                    if(request != null){
+//                        isIgnoreCancel = true;
+//                        UploadService.stopUpload(mRequestID);
+//                        request = null;
+//                    }
+                        if(!isGetingFuid){
+                            if(mFUID == null){
+                                getFUID();
+                            }else {
+                                if(mSliced == null)return;
+                                if (mSliced.mMakeChunking){
+                                    //holder;
+                                    Log.d("UUPItem-start","请等待。。文件分片中");
+                                }else{
+                                    next();
+                                    this.calculateSpeed();
+                                    isIgnoreCancel = false;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -173,13 +208,14 @@ public class UUPItem {
     protected void preFinish(){
         isFinish = true;
         mProgress = 1.0f;
+        mError = UUPErrorType.NONE;
         mHander.sendEmptyMessage(1);
         mHander.sendEmptyMessage(2);
         destory();
     }
 
     public void destory(){
-
+        mCurrentItem = null;
         UUPUtil.deleteThumbnail(mThumbnailsPath);
 
         if(mSpeedTimer!=null){
@@ -187,7 +223,6 @@ public class UUPItem {
         }
         if( request != null){
             isIgnoreCancel = true;
-            UploadService.stopUpload(mRequestID);
             request = null;
         }
         if(mReceiver!=null)
@@ -198,13 +233,13 @@ public class UUPItem {
 
         mRequestID = null;
         isPaused = false;
-        mCurrentItem = null;
         mSliced = null;
         mReceiver = null;
         mSpeedTimer = null;
     }
 
     protected void getFUID(){
+        isGetingFuid = true;
         WeakReference<UUPItem> item = new WeakReference<>(this);
         new Thread(new UUPItemFUID(item)).start();
     }
@@ -233,12 +268,12 @@ public class UUPItem {
             cancle();
             return;
         }
-        if (request != null) {
-            if(mRequestID != null)
-                UploadService.stopUpload(mRequestID);
-            request = null;
-        }
-        Log.d("UUPItem", "next: "+ mCurrentItem.mChunkIndex+" "+mCurrentItem.isSuspend);
+//        if (request != null) {
+//            if(mRequestID != null)
+//                isIgnoreCancel = true;
+//                UploadService.stopUpload(mRequestID);
+//            request = null;
+//        }
         try {
             request = new MultipartUploadRequest(mContext,UUPUtil.randomName() + mDisplayName,mConfig.serverUri);
             request.addFileToUpload(mCurrentItem.mChunkFile.getAbsolutePath(), "filename");
@@ -262,7 +297,7 @@ public class UUPItem {
         request.addParameter("size", String.valueOf(mSize));
         request.setAutoDeleteFilesAfterSuccessfulUpload(false);
         request.setMaxRetries(mConfig.retryTimes);
-
+        Log.d("UUPItem", "onCompleted-Request【index: "+ (mCurrentItem.mChunkIndex+1)+" total:"+mSliced.mTotalChunks+"  size:"+mSize + " fuid:"+mFUID +" auth-sign:"+mConfig.authSign+"】");
         try {
             mRequestID = request.startUpload();
             isPaused = false;
@@ -284,7 +319,9 @@ public class UUPItem {
                         if (mType == UUPItemType.VIDEO) {
                             MediaMetadataRetriever mmr = new MediaMetadataRetriever();
                             mmr.setDataSource(mContext, mContentUri);
-                            long rd = Long.parseLong(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
+                            String duration = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                            if(duration == null)duration = "0";
+                            long rd = Long.parseLong(duration);
                             mDuration = Math.round(rd * 1.0 /1000);
                             mThumbnailsPath = UUPUtil.getThumbnailsPath(mContext, mFile, mmr.getFrameAtTime(0));
                             mMimeType = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE);
@@ -292,7 +329,9 @@ public class UUPItem {
                         } else if (mType == UUPItemType.AUDIO) {
                             MediaMetadataRetriever mmr = new MediaMetadataRetriever();
                             mmr.setDataSource(mContext, mContentUri);
-                            long rd = Long.parseLong(mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION));
+                            String duration = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                            if(duration == null)duration = "0";
+                            long rd = Long.parseLong(duration);
                             mDuration = Math.round(rd * 1.0 /1000);
                             mThumbnailsPath = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM);
                             mMimeType = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE);
@@ -383,7 +422,6 @@ public class UUPItem {
 
         if (mSliced == null){
             mSliced = new UUPSliced(new WeakReference<>(this));
-            if(isValidate)mSliced.makeChunks();
         }
 
         if(mReceiver == null){
@@ -397,6 +435,8 @@ public class UUPItem {
         } else if(mDuration > mConfig.duration){
             mError = UUPErrorType.OVER_MAXDURATION;
             isValidate = false;
+        }else{
+            if(isValidate)mSliced.makeChunks();
         }
 
         if(mError != UUPErrorType.NONE ){
@@ -418,25 +458,34 @@ public class UUPItem {
                     mSpeedStr = UUPUtil.calculateSpeed(mSpeed);
                     mLastProgress = mProgress;
                     Log.d("UUPItem", "calculateSpeed: "+ mSpeedStr +" "+mSpeed +" "+tmp);
-                    if(lowTimes >= 10 && lowTimes % 5 == 0)//网速缓慢每间隔5秒提示一次
-                    { mError = UUPErrorType.LOW_NET;mHander.sendEmptyMessage(0);}
+                    if(mSpeed < 10){ lowTimes++; }else {
+                        if(mError == UUPErrorType.LOW_NET){
+                            mError = UUPErrorType.NONE;
+                        }
+                        lowTimes = 0;
+                    }
+                    if(lowTimes >= 10)//网速缓慢每间隔10秒提示一次
+                    {
+                        mSpeedStr = "网速缓慢 "+mSpeedStr;
+                        if(lowTimes % 10 == 0){
+                            if(mError != UUPErrorType.LOW_NET){
+                                mError = UUPErrorType.LOW_NET;
+                                mHander.sendEmptyMessage(0);
+                            }
+                        }
+                    }
                     mHander.sendEmptyMessage(1);
-                    if(!UUPUtil.isNetworkConnected(mContext)){ pause(); }else { preStart(); }
-                    if(mSpeed < 10){ lowTimes++; }else { lowTimes = 0; }
+                    if(!UUPUtil.isNetworkConnected(mContext)){
+                        if(!isCancel){
+                            isAppPause = true;
+                            pause();
+                        }
+                    }else {
+                        if(mCurrentItem == null)preStart();
+                    }
                 }
             },0,1000);
         }
-    }
-
-    //仅供recevier使用
-    protected void pCalculateSpeed(){
-        double tmp = (mProgress - mLastProgress) * mSize;
-        mSpeed = (long) tmp;
-        if(mSpeed < 0)mSpeed = mSpeed * -1;
-        mSpeedStr = UUPUtil.calculateSpeed(mSpeed);
-        mLastProgress = mProgress;
-        Log.d("UUPItem", "calculateSpeed: "+ mSpeedStr +" "+mSpeed +" "+tmp);
-        mHander.sendEmptyMessage(1);
     }
 
     @Override
@@ -454,7 +503,16 @@ public class UUPItem {
                 ", mSpeed=" + mSpeed +
                 ", mSpeedStr='" + mSpeedStr + '\'' +
                 ", mType=" + mType +
+                ", mError=" + mError +
                 ", mContext=" + mContext +
                 '}';
+    }
+
+    public boolean isPaused() {
+        return isPaused;
+    }
+
+    public void setPaused(boolean paused) {
+        isPaused = paused;
     }
 }

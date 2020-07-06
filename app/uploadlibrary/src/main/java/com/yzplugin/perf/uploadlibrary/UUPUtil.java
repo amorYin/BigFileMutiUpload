@@ -55,6 +55,7 @@ class UUPUtil {
 
     protected static String getThumbnailsPath(Context context, File file, Bitmap bm){
         try {
+            if(bm == null) return null;
             File thumbnails = context.getExternalFilesDir("Thumbnails");
             UUPUtil.isFilesExist(thumbnails);
             String path = file.getName().replace(".","~");

@@ -22,16 +22,12 @@ class UUPItemFUID implements Runnable {
 
     private void getFUID(){
         try {
+            if(mItem == null)return;
             String path = mItem.mConfig.fuidURi;
             if (mItem.mFUID != null){
                 path = path + "?fuid="+mItem.mFUID+"&total="+mItem.mSliced.mTotalChunks;
             }
 
-            // 请求的参数转换为byte数组
-//            String params = "Auth-Sign="+ URLEncoder.encode(mItem.mConfig.authSign, "UTF-8")
-//                    + "&Device-Token=" + URLEncoder.encode(mItem.mConfig.deviceToken, "UTF-8");
-//
-//            path = path + "&" + params;
             // 新建一个URL对象
             URL url = new URL(path);
             // 打开一个HttpURLConnection连接
@@ -53,6 +49,7 @@ class UUPItemFUID implements Runnable {
             // 判断请求是否成功
             if (urlConn.getResponseCode() == 200) {
                 // 获取返回的数据
+                if(mItem == null ) return;
                 InputStream inputStream = urlConn.getInputStream();
                 byte[] data=new byte[1024];
                 StringBuilder buffer = new StringBuilder();
@@ -68,7 +65,6 @@ class UUPItemFUID implements Runnable {
                     String status = result.get("status");
                     if(code == null)code = "";
                     if("FAIL".equals(status)){
-                        mItem.pause();
                         switch (code) {
                             case "-1":
                                 mItem.mError = UUPErrorType.BAD_MIMETYPE;
@@ -85,43 +81,46 @@ class UUPItemFUID implements Runnable {
                                 break;
                             case "1003":
                                 mItem.mError = UUPErrorType.BAD_SLICED;
-                                mItem.next();//传下一片
                                 break;
                             default:
                                 mItem.mError = UUPErrorType.BAD_OTHER;
                                 break;
                         }
-                        mItem.mHander.sendEmptyMessage(0);
-                        if(!mItem.isCancel)mItem.cancle();
                     }else {
                         String fuid = result.get("fuid");
                         if(fuid != null){
                             mItem.mError = UUPErrorType.NONE;
                             mItem.mFUID = fuid;
+                            mItem.isGetingFuid = false;
                             mItem.preStart();
                         }else {
                             mItem.mError = UUPErrorType.BAD_OTHER;
-                            mItem.cancle();
                         }
                     }
                 }else {
-                    if(mItem.mCurrentItem != null){
-                        mItem.mCurrentItem.isSuspend = false;
-                        mItem.mCurrentItem.isFinish = false;
-                        mItem.mCurrentItem.mPProgress = 0.0f;
-                    }
+                    mItem.mError = UUPErrorType.NONE;
+                    mItem.isGetingFuid = false;
+                    mItem.mFUID = null;
                     mItem.preStart();
                 }
 
             } else {
-                mItem.mError = UUPErrorType.BAD_FUID;
+                if(mItem!=null )mItem.mError = UUPErrorType.BAD_FUID;
             }
             urlConn.disconnect();
         } catch (Exception e) {
-            mItem.mError = UUPErrorType.BAD_FUID;
+            if(mItem!=null )mItem.mError = UUPErrorType.BAD_FUID;
             e.printStackTrace();
         }
-        mItem.mHander.sendEmptyMessage(0);
+        if(mItem!=null ){
+            if(mItem.mError != UUPErrorType.NONE){
+                if(UUPUtil.isNetworkConnected(mItem.mContext)){
+                    mItem.mError = UUPErrorType.NONE;
+                    run();
+                }
+            }
+            mItem.mHander.sendEmptyMessage(0);
+        }
     }
 
     private Map<String,String> excuteData(String jsonString) {
